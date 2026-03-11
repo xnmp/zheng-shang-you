@@ -230,6 +230,9 @@ class ZSYApp(App):
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("p", "play_pass", "Pass"),
+        Binding("up,k", "move_up", "Prev Move", show=False),
+        Binding("down,j", "move_down", "Next Move", show=False),
+        Binding("enter", "confirm_move", "Play Move", show=False),
     ]
 
     def __init__(
@@ -246,7 +249,9 @@ class ZSYApp(App):
         self.teams = teams
         self.game: Game | None = None
         self._pending_moves: list[WildcardAssignment] = []
+        self._move_buttons: list[MoveButton] = []
         self._waiting_for_input = False
+        self._selected_move: int = 0
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -348,13 +353,19 @@ class ZSYApp(App):
 
         moves_list = self.query_one("#moves-list", Vertical)
         moves_list.remove_children()
+        self._move_buttons = []
         for i, m in enumerate(moves):
-            btn = MoveButton(m, i, hr, id=f"move-{i}")
+            btn = MoveButton(m, i, hr)
+            self._move_buttons.append(btn)
             moves_list.mount(btn)
+        self._selected_move = 0
+        if self._move_buttons:
+            self.set_timer(0.05, self._focus_selected_move)
 
     def _clear_moves(self) -> None:
         moves_list = self.query_one("#moves-list", Vertical)
         moves_list.remove_children()
+        self._move_buttons = []
         self._waiting_for_input = False
 
     @on(Button.Pressed)
@@ -371,6 +382,28 @@ class ZSYApp(App):
         pass_move = self._pending_moves[0]  # pass is always first
         if pass_move.combination.type == CombinationType.PASS:
             self._play_human_move(pass_move)
+
+    def _focus_selected_move(self) -> None:
+        if 0 <= self._selected_move < len(self._move_buttons):
+            self._move_buttons[self._selected_move].focus()
+
+    def action_move_up(self) -> None:
+        if not self._waiting_for_input or not self._pending_moves:
+            return
+        self._selected_move = (self._selected_move - 1) % len(self._pending_moves)
+        self._focus_selected_move()
+
+    def action_move_down(self) -> None:
+        if not self._waiting_for_input or not self._pending_moves:
+            return
+        self._selected_move = (self._selected_move + 1) % len(self._pending_moves)
+        self._focus_selected_move()
+
+    def action_confirm_move(self) -> None:
+        if not self._waiting_for_input or not self._pending_moves:
+            return
+        if 0 <= self._selected_move < len(self._pending_moves):
+            self._play_human_move(self._pending_moves[self._selected_move])
 
     def _play_human_move(self, wa: WildcardAssignment) -> None:
         if self.game is None:
