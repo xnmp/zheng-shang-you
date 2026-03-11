@@ -137,6 +137,7 @@ class GameSession:
         self.num_decks = num_decks
         self.game: Game | None = None
         self._move_queue: asyncio.Queue[int] = asyncio.Queue()
+        self._game_task: asyncio.Task | None = None
 
     async def send(self, msg: dict) -> None:
         await self.ws.send_json(msg)
@@ -276,6 +277,19 @@ class GameSession:
             "finish_order": game.finish_order,
         })
 
+    def start_in_background(self) -> None:
+        """Cancel any running game and start a new one as a background task."""
+        if self._game_task and not self._game_task.done():
+            self._game_task.cancel()
+        self._move_queue = asyncio.Queue()
+        self._game_task = asyncio.create_task(self._run_start())
+
+    async def _run_start(self) -> None:
+        try:
+            await self.start()
+        except asyncio.CancelledError:
+            pass
+
     async def handle_message(self, data: dict) -> None:
         """Handle an incoming WebSocket message from the client."""
         msg_type = data.get("type")
@@ -285,9 +299,7 @@ class GameSession:
             await self._move_queue.put(move_index)
 
         elif msg_type == "new_game":
-            # Reset and start a new game
-            self._move_queue = asyncio.Queue()
-            await self.start()
+            self.start_in_background()
 
 
 app = FastAPI(title="Zheng Shang You")
@@ -305,16 +317,15 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     session = GameSession(websocket, num_players=3, human_player=0)
-
-    # Start the game loop in a background task
-    game_task = asyncio.create_task(session.start())
+    session.start_in_background()
 
     try:
         while True:
             data = await websocket.receive_json()
             await session.handle_message(data)
     except WebSocketDisconnect:
-        game_task.cancel()
+        if session._game_task and not session._game_task.done():
+            session._game_task.cancel()
 
 
 def main() -> None:

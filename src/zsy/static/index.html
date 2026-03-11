@@ -1005,7 +1005,7 @@ header {
   }
 
   function showHumanFinished(isWinner) {
-    // Show result immediately — don't wait for the full game to end
+    // Show game-over overlay immediately — player can start a new game
     $gameOverOverlay.classList.add('visible');
     if (isWinner) {
       $gameOverTitle.textContent = '你赢了！';
@@ -1013,17 +1013,12 @@ header {
       $gameOverResult.className = 'result won';
     } else {
       $gameOverTitle.textContent = '出完了';
-      $gameOverResult.textContent = 'You\'re out of cards, but someone finished first.';
+      $gameOverResult.textContent = 'Out of cards, but someone finished before you.';
       $gameOverResult.className = 'result lost';
     }
   }
 
   function showGameOver(data) {
-    // If overlay is already showing a win, just update with final details
-    if ($gameOverOverlay.classList.contains('visible') && data.human_won) {
-      $gameOverResult.textContent = `Victory! Finish order: ${data.finish_order.join(' → ')}`;
-      return;
-    }
     $gameOverOverlay.classList.add('visible');
     if (data.human_won) {
       $gameOverTitle.textContent = '你赢了！';
