@@ -248,6 +248,77 @@ header {
   animation: bomb-pulse 0.6s ease-in-out 3;
 }
 
+/* ── Play Preview ── */
+
+.play-preview {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 20px;
+  background: rgba(255,255,255,0.03);
+  border: 1px dashed rgba(212,168,67,0.25);
+  border-radius: 10px;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+
+.play-preview.visible {
+  display: flex;
+}
+
+.play-preview:hover {
+  opacity: 1;
+}
+
+.preview-cards {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.preview-cards .card {
+  width: 46px;
+  height: 68px;
+  cursor: default;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.preview-cards .card .card-rank { font-size: 16px; }
+.preview-cards .card .card-suit { font-size: 14px; }
+
+.preview-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+.preview-play-btn {
+  font-family: 'Crimson Pro', serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--jade-deep);
+  background: var(--gold);
+  border: none;
+  padding: 8px 32px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preview-play-btn:hover {
+  background: var(--gold-bright);
+  box-shadow: 0 0 12px rgba(212,168,67,0.3);
+}
+
+.preview-play-btn:active {
+  transform: scale(0.97);
+}
+
 @keyframes bomb-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
@@ -730,6 +801,11 @@ header {
       <div class="table-empty" id="table-empty">自由出牌</div>
       <div class="table-combo-label" id="table-combo-label"></div>
     </div>
+    <div class="play-preview" id="play-preview">
+      <div class="preview-cards" id="preview-cards"></div>
+      <div class="preview-label" id="preview-label"></div>
+      <button class="preview-play-btn" id="preview-play-btn">Play</button>
+    </div>
   </div>
 
   <div class="sidebar">
@@ -784,6 +860,10 @@ header {
   const $gameOverOverlay = document.getElementById('game-over-overlay');
   const $gameOverTitle = document.getElementById('game-over-title');
   const $gameOverResult = document.getElementById('game-over-result');
+  const $playPreview = document.getElementById('play-preview');
+  const $previewCards = document.getElementById('preview-cards');
+  const $previewLabel = document.getElementById('preview-label');
+  const $previewPlayBtn = document.getElementById('preview-play-btn');
 
   // ── Card rendering ──
 
@@ -906,6 +986,8 @@ header {
     } else {
       selectedMoveIndex = -1;
     }
+
+    updatePreview();
   }
 
   function renderHand(state) {
@@ -981,6 +1063,50 @@ header {
       btn.addEventListener('click', () => playMove(idx));
       $movesList.appendChild(btn);
     });
+
+    updatePreview();
+  }
+
+  function getActiveMove() {
+    // Returns the index of the move to preview/play:
+    // - the selected move if one is highlighted via keyboard nav
+    // - otherwise the first visible (non-filtered, non-pass) move
+    // - otherwise the first visible move (including pass)
+    if (selectedMoveIndex >= 0) return selectedMoveIndex;
+    if (!currentMoves.length) return -1;
+
+    const btns = $movesList.querySelectorAll('.move-btn');
+    let firstVisible = -1;
+    let firstNonPass = -1;
+    btns.forEach((btn, i) => {
+      if (btn.style.display === 'none') return;
+      if (firstVisible < 0) firstVisible = i;
+      if (firstNonPass < 0 && !currentMoves[i].is_pass) firstNonPass = i;
+    });
+    return firstNonPass >= 0 ? firstNonPass : firstVisible;
+  }
+
+  function updatePreview() {
+    const idx = getActiveMove();
+    if (idx < 0 || !currentMoves.length) {
+      $playPreview.classList.remove('visible');
+      return;
+    }
+
+    const move = currentMoves[idx];
+    $previewCards.innerHTML = '';
+
+    if (move.is_pass) {
+      $previewLabel.textContent = 'Pass';
+    } else {
+      move.cards.forEach(c => {
+        $previewCards.appendChild(createCardEl(c, true));
+      });
+      $previewLabel.textContent = move.label + (move.is_bomb ? ' 💣' : '');
+    }
+
+    $previewPlayBtn.dataset.moveIndex = idx;
+    $playPreview.classList.add('visible');
   }
 
   function addLog(text) {
@@ -1039,6 +1165,7 @@ header {
       // Clear selection and moves immediately for responsiveness
       $handCards.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
       $movesList.innerHTML = '<div style="padding:8px;color:var(--text-dim);font-size:12px;">Waiting...</div>';
+      $playPreview.classList.remove('visible');
       currentMoves = [];
       selectedMoveIndex = -1;
     }
@@ -1080,7 +1207,8 @@ header {
       navigateMoves(1);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (selectedMoveIndex >= 0) playMove(selectedMoveIndex);
+      const active = getActiveMove();
+      if (active >= 0) playMove(active);
     }
   });
 
@@ -1096,6 +1224,7 @@ header {
 
     btns.forEach((b, i) => b.classList.toggle('selected', i === selectedMoveIndex));
     btns[selectedMoveIndex].scrollIntoView({ block: 'nearest' });
+    updatePreview();
   }
 
   // ── SortableJS ──
@@ -1166,6 +1295,10 @@ header {
 
   document.getElementById('new-game-btn').addEventListener('click', newGame);
   document.getElementById('game-over-new-game').addEventListener('click', newGame);
+  $previewPlayBtn.addEventListener('click', () => {
+    const active = getActiveMove();
+    if (active >= 0) playMove(active);
+  });
 
   connect();
 })();
