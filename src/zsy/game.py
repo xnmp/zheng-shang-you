@@ -51,6 +51,7 @@ class GameState:
     trick_leader: int
     consecutive_passes: int
     cards_remaining: list[int]  # per player
+    teams: list[int] | None = None  # team ID per player, or None
     play_history: list[PlayRecord] = field(default_factory=list)
 
 
@@ -62,7 +63,16 @@ class Game:
         num_players: int,
         agents: list[Agent],
         num_decks: int | None = None,
+        teams: list[int] | None = None,
     ) -> None:
+        """
+        Args:
+            num_players: Number of players
+            agents: Agent per player
+            num_decks: 1 for ≤3 players, 2 for 4+. Auto-selected if None.
+            teams: Optional team assignment per player (e.g., [0, 1, 0, 1]).
+                   If one teammate finishes first, the whole team wins.
+        """
         if num_decks is None:
             num_decks = 1 if num_players <= 3 else 2
 
@@ -70,7 +80,12 @@ class Game:
         self.agents = agents
         self.players = [Player(id=i) for i in range(num_players)]
         self.num_decks = num_decks
+        self.teams = teams
         self.phase = GamePhase.DEALING
+
+        if teams is not None:
+            for i, team_id in enumerate(teams):
+                self.players[i].team = team_id
 
         self.current_player = 0
         self.active_combo: Combination | None = None
@@ -78,6 +93,7 @@ class Game:
         self.consecutive_passes = 0
         self.play_history: list[PlayRecord] = []
         self.winner: int | None = None
+        self.winning_team: int | None = None
         self.finish_order: list[int] = []
 
     def deal(self) -> None:
@@ -96,6 +112,7 @@ class Game:
             trick_leader=self.trick_leader,
             consecutive_passes=self.consecutive_passes,
             cards_remaining=[p.card_count for p in self.players],
+            teams=self.teams,
             play_history=list(self.play_history),
         )
 
@@ -162,6 +179,8 @@ class Game:
             self.finish_order.append(player.id)
             if self.winner is None:
                 self.winner = player.id
+                if self.teams is not None:
+                    self.winning_team = self.teams[player.id]
 
         # Check if trick is over (all other active players passed)
         active_players = [p for p in self.players if p.has_cards]
