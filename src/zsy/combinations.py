@@ -102,7 +102,12 @@ class Combination:
             return False
 
         assert self.primary_rank is not None and other.primary_rank is not None
-        return self.primary_rank > other.primary_rank
+        if self.primary_rank != other.primary_rank:
+            return self.primary_rank > other.primary_rank
+        # Same rank: for joker singles, big joker beats small joker
+        if self.type == CombinationType.SINGLE and self.primary_rank == Rank.JOKER:
+            return self.cards[0].suit == Suit.BIG_JOKER and other.cards[0].suit == Suit.SMALL_JOKER
+        return False
 
 
 def _bomb_beats(attacker: Combination, defender: Combination) -> bool:
