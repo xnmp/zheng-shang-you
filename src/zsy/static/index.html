@@ -373,6 +373,16 @@ header {
   opacity: 0.85;
 }
 
+.move-btn.selection-match {
+  background: rgba(212,168,67,0.15);
+  border-color: var(--gold);
+  box-shadow: 0 0 8px rgba(212,168,67,0.15);
+}
+
+.move-btn.filtered-out {
+  display: none;
+}
+
 #game-log {
   flex: 1;
   overflow-y: auto;
@@ -828,6 +838,60 @@ header {
     }
   }
 
+  function getSelectedCardIds() {
+    return [...$handCards.querySelectorAll('.card.selected')].map(el => el.dataset.cardId);
+  }
+
+  function onCardSelectionChanged() {
+    // Filter and highlight moves matching the selected cards
+    if (!currentMoves.length) return;
+    const selectedIds = getSelectedCardIds().sort();
+
+    const btns = $movesList.querySelectorAll('.move-btn');
+    if (selectedIds.length === 0) {
+      // No selection — show all moves normally
+      btns.forEach(b => {
+        b.classList.remove('filtered-out', 'selection-match');
+        b.style.display = '';
+      });
+      selectedMoveIndex = -1;
+      return;
+    }
+
+    // Find moves whose hand_card_ids match the selected set exactly
+    let matchCount = 0;
+    let lastMatchIdx = -1;
+    btns.forEach((btn, i) => {
+      const move = currentMoves[i];
+      const moveIds = (move.hand_card_ids || []).slice().sort();
+      const matches = selectedIds.length === moveIds.length &&
+        selectedIds.every((id, j) => id === moveIds[j]);
+      if (matches) {
+        btn.classList.add('selection-match');
+        btn.classList.remove('filtered-out');
+        btn.style.display = '';
+        matchCount++;
+        lastMatchIdx = i;
+      } else if (move.is_pass) {
+        // Always keep pass visible
+        btn.classList.remove('selection-match', 'filtered-out');
+        btn.style.display = '';
+      } else {
+        btn.classList.add('filtered-out');
+        btn.classList.remove('selection-match');
+        btn.style.display = 'none';
+      }
+    });
+
+    // If exactly one match, auto-select it
+    if (matchCount === 1) {
+      selectedMoveIndex = lastMatchIdx;
+      btns.forEach((b, i) => b.classList.toggle('selected', i === lastMatchIdx));
+    } else {
+      selectedMoveIndex = -1;
+    }
+  }
+
   function renderHand(state) {
     // Preserve user's custom order if they've rearranged
     const existingIds = [...$handCards.children].map(el => el.dataset.cardId);
@@ -850,7 +914,10 @@ header {
       orderedIds.forEach(id => {
         if (cardMap[id]) {
           const el = createCardEl(cardMap[id]);
-          el.addEventListener('click', () => el.classList.toggle('selected'));
+          el.addEventListener('click', () => {
+            el.classList.toggle('selected');
+            onCardSelectionChanged();
+          });
           $handCards.appendChild(el);
         }
       });
@@ -928,9 +995,11 @@ header {
   function playMove(index) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'play_move', index }));
-      // Clear moves immediately for responsiveness
+      // Clear selection and moves immediately for responsiveness
+      $handCards.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
       $movesList.innerHTML = '<div style="padding:8px;color:var(--text-dim);font-size:12px;">Waiting...</div>';
       currentMoves = [];
+      selectedMoveIndex = -1;
     }
   }
 
@@ -950,10 +1019,16 @@ header {
   // ── Keyboard shortcuts ──
 
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      // Deselect all cards
+      $handCards.querySelectorAll('.card.selected').forEach(el => el.classList.remove('selected'));
+      onCardSelectionChanged();
+      return;
+    }
+
     if (!currentMoves.length) return;
 
     if (e.key === 'p' || e.key === 'P') {
-      // Quick pass
       const passIdx = currentMoves.findIndex(m => m.is_pass);
       if (passIdx >= 0) playMove(passIdx);
     } else if (e.key === 'ArrowUp' || e.key === 'k') {

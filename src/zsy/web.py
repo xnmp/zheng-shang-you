@@ -48,6 +48,20 @@ def card_to_dict(card: Card, high_card_rank: Rank) -> dict:
     }
 
 
+def _actual_hand_card_ids(wa: WildcardAssignment) -> list[str]:
+    """Compute the card IDs that this move consumes from the player's hand."""
+    combo = wa.combination
+    if combo.type == CombinationType.PASS:
+        return []
+    if not wa.assignments:
+        return [f"{c.rank.value}-{c.suit.value}" for c in combo.cards]
+    # With wildcards: non-substituted cards + original wildcard cards
+    substituted = {sub for _, sub in wa.assignments}
+    non_wild = [c for c in combo.cards if c not in substituted]
+    originals = [orig for orig, _ in wa.assignments]
+    return [f"{c.rank.value}-{c.suit.value}" for c in non_wild + originals]
+
+
 def move_to_dict(wa: WildcardAssignment, index: int, high_card_rank: Rank) -> dict:
     """Serialize a WildcardAssignment to a JSON-friendly dict."""
     combo = wa.combination
@@ -59,6 +73,7 @@ def move_to_dict(wa: WildcardAssignment, index: int, high_card_rank: Rank) -> di
         "cards": cards,
         "is_bomb": combo.is_bomb,
         "is_pass": combo.type == CombinationType.PASS,
+        "hand_card_ids": _actual_hand_card_ids(wa),
         "assignments": [
             {"original": card_to_dict(o, high_card_rank),
              "substitute": card_to_dict(s, high_card_rank)}
