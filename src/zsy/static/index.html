@@ -383,6 +383,22 @@ header {
   display: none;
 }
 
+.auto-pass-toast {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-dim);
+  text-align: center;
+  animation: toast-fade 1.5s ease-out forwards;
+}
+
+@keyframes toast-fade {
+  0% { opacity: 0; transform: translateY(4px); }
+  15% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 #game-log {
   flex: 1;
   overflow-y: auto;
@@ -977,11 +993,41 @@ header {
     $gameLog.scrollTop = $gameLog.scrollHeight;
   }
 
+  function showAutoPass() {
+    // Brief visual toast in the moves area
+    $movesList.innerHTML = '';
+    const toast = document.createElement('div');
+    toast.className = 'auto-pass-toast';
+    toast.textContent = 'Auto-pass — no playable moves';
+    $movesList.appendChild(toast);
+    // Clear after animation
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 1500);
+  }
+
+  function showHumanFinished(isWinner) {
+    // Show result immediately — don't wait for the full game to end
+    $gameOverOverlay.classList.add('visible');
+    if (isWinner) {
+      $gameOverTitle.textContent = '你赢了！';
+      $gameOverResult.textContent = 'You emptied your hand first!';
+      $gameOverResult.className = 'result won';
+    } else {
+      $gameOverTitle.textContent = '出完了';
+      $gameOverResult.textContent = 'You\'re out of cards, but someone finished first.';
+      $gameOverResult.className = 'result lost';
+    }
+  }
+
   function showGameOver(data) {
+    // If overlay is already showing a win, just update with final details
+    if ($gameOverOverlay.classList.contains('visible') && data.human_won) {
+      $gameOverResult.textContent = `Victory! Finish order: ${data.finish_order.join(' → ')}`;
+      return;
+    }
     $gameOverOverlay.classList.add('visible');
     if (data.human_won) {
       $gameOverTitle.textContent = '你赢了！';
-      $gameOverResult.textContent = 'Victory!';
+      $gameOverResult.textContent = `Victory! Finish order: ${data.finish_order.join(' → ')}`;
       $gameOverResult.className = 'result won';
     } else {
       $gameOverTitle.textContent = '游戏结束';
@@ -1095,6 +1141,14 @@ header {
 
         case 'log':
           addLog(msg.text);
+          break;
+
+        case 'auto_pass':
+          showAutoPass();
+          break;
+
+        case 'human_finished':
+          showHumanFinished(msg.winner);
           break;
 
         case 'game_over':

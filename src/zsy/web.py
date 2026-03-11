@@ -183,31 +183,46 @@ class GameSession:
                 moves = game.get_legal_moves(pid)
                 hr = player.high_card_rank
 
-                await self.send(game_state_to_dict(game, self.human_player))
-                await self.send({
-                    "type": "moves",
-                    "moves": [move_to_dict(m, i, hr) for i, m in enumerate(moves)],
-                })
-
-                # Wait for the human to choose
-                choice_idx = await self._move_queue.get()
-                if 0 <= choice_idx < len(moves):
-                    chosen = moves[choice_idx]
+                # Auto-pass if the only move is pass
+                non_pass = [m for m in moves if m.combination.type != CombinationType.PASS]
+                if not non_pass:
+                    chosen = moves[0]
+                    await self.send(game_state_to_dict(game, self.human_player))
+                    await self.send({"type": "auto_pass"})
+                    await self.send_log("[You] Pass (no playable moves)")
+                    game._apply_move(chosen)
+                    await asyncio.sleep(0.5)
                 else:
-                    chosen = moves[0]  # fallback to pass
+                    await self.send(game_state_to_dict(game, self.human_player))
+                    await self.send({
+                        "type": "moves",
+                        "moves": [move_to_dict(m, i, hr) for i, m in enumerate(moves)],
+                    })
 
-                combo = chosen.combination
-                if combo.type == CombinationType.PASS:
-                    await self.send_log("[You] Pass")
-                else:
-                    cards_str = " ".join(repr(c) for c in combo.cards)
-                    label = COMBO_LABELS.get(combo.type, "?")
-                    await self.send_log(f"[You] {label}: {cards_str}")
+                    # Wait for the human to choose
+                    choice_idx = await self._move_queue.get()
+                    if 0 <= choice_idx < len(moves):
+                        chosen = moves[choice_idx]
+                    else:
+                        chosen = moves[0]
 
-                game._apply_move(chosen)
+                    combo = chosen.combination
+                    if combo.type == CombinationType.PASS:
+                        await self.send_log("[You] Pass")
+                    else:
+                        cards_str = " ".join(repr(c) for c in combo.cards)
+                        label = COMBO_LABELS.get(combo.type, "?")
+                        await self.send_log(f"[You] {label}: {cards_str}")
+
+                    game._apply_move(chosen)
 
                 if not player.has_cards:
                     await self.send_log("*** You are out of cards! ***")
+                    await self.send(game_state_to_dict(game, self.human_player))
+                    await self.send({
+                        "type": "human_finished",
+                        "winner": game.winner == self.human_player,
+                    })
 
             else:
                 # AI turn
