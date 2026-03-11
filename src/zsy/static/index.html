@@ -858,15 +858,15 @@ header {
       return;
     }
 
-    // Find moves whose hand_card_ids match the selected set exactly
+    // Find moves whose hand_card_ids contain ALL selected cards
+    const selectedSet = new Set(selectedIds);
     let matchCount = 0;
     let lastMatchIdx = -1;
     btns.forEach((btn, i) => {
       const move = currentMoves[i];
-      const moveIds = (move.hand_card_ids || []).slice().sort();
-      const matches = selectedIds.length === moveIds.length &&
-        selectedIds.every((id, j) => id === moveIds[j]);
-      if (matches) {
+      const moveIds = new Set(move.hand_card_ids || []);
+      const matches = selectedIds.every(id => moveIds.has(id));
+      if (matches && !move.is_pass) {
         btn.classList.add('selection-match');
         btn.classList.remove('filtered-out');
         btn.style.display = '';
