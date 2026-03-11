@@ -289,7 +289,6 @@ class ZSYApp(App):
         log.write_line(f"You are Player {self.human_player}")
         log.write_line("")
 
-        self._update_display()
         self._run_until_human()
 
     def _update_display(self) -> None:
@@ -338,7 +337,7 @@ class ZSYApp(App):
         player = game.players[self.human_player]
         sorted_hand = sorted(player.hand, key=lambda c: (effective_rank(c, hr), c.suit))
         for i, card in enumerate(sorted_hand):
-            w = CardWidget(card, i, hr, id=f"card-{i}")
+            w = CardWidget(card, i, hr)
             hand_container.mount(w)
 
     def _show_moves(self, moves: list[WildcardAssignment]) -> None:
